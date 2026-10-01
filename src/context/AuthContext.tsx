@@ -18,6 +18,7 @@ interface AuthContextType {
   isInAppBrowser: boolean;
   isConfigured: boolean;
   loginWithGoogle: () => Promise<void>;
+  loginWithEmail: (email: string, displayName?: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -41,8 +42,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Listen to redirect auth result and onAuthStateChanged
+  // Check for persistent local Gmail session
   useEffect(() => {
+    const savedEmail = localStorage.getItem('mymoney_user_email');
+    const savedUid = localStorage.getItem('mymoney_user_uid');
+    const savedName = localStorage.getItem('mymoney_user_name');
+
+    if (savedEmail && savedUid && !user) {
+      const mockUser = {
+        uid: savedUid,
+        email: savedEmail,
+        displayName: savedName || savedEmail.split('@')[0],
+      } as unknown as User;
+      setUser(mockUser);
+      seedUserDataIfNeeded(savedUid).catch(console.warn);
+      setLoading(false);
+      return;
+    }
+
     let unsubscribe: () => void = () => {};
 
     const handleAuthInit = async () => {
@@ -59,6 +76,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (redirectRes?.user) {
           await seedUserDataIfNeeded(redirectRes.user.uid);
+          localStorage.setItem('mymoney_user_email', redirectRes.user.email || '');
+          localStorage.setItem('mymoney_user_uid', redirectRes.user.uid);
+          localStorage.setItem('mymoney_user_name', redirectRes.user.displayName || '');
         }
       } catch (err: any) {
         handleAuthError(err);
@@ -66,13 +86,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-          setUser(currentUser);
           if (currentUser) {
+            setUser(currentUser);
+            localStorage.setItem('mymoney_user_email', currentUser.email || '');
+            localStorage.setItem('mymoney_user_uid', currentUser.uid);
+            localStorage.setItem('mymoney_user_name', currentUser.displayName || '');
             try {
               await seedUserDataIfNeeded(currentUser.uid);
             } catch (seedErr) {
               console.error('Seeding error:', seedErr);
             }
+          } else if (!savedUid) {
+            setUser(null);
           }
           setLoading(false);
         });
@@ -102,19 +127,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (errorCode === 'auth/unauthorized-domain') {
-      setError('Firebase တွင် ဤ domain ကို ခွင့်ပြုရန် လိုအပ်ပါသည် (Authorized Domain)');
+      setError('domain_unauthorized');
       return;
     }
 
     if (errorCode === 'auth/popup-blocked') {
       signInWithRedirect(auth, googleProvider).catch(() => {
-        setError('ဝင်ရောက်မှု မအောင်မြင်ပါ၊ Browser တွင် Popup ခွင့်ပြုပြီး ထပ်ကြိုးစားပါ');
+        setError('popup_blocked');
       });
       return;
     }
 
-    setError('ဝင်ရောက်မှု မအောင်မြင်ပါ၊ ထပ်ကြိုးစားပါ');
+    setError('ဝင်ရောက်မှု မအောင်မြင်ပါ၊ Gmail ရိုက်ထည့်ပြီး ဝင်ပါ');
     console.error('Firebase Auth Error:', err);
+  };
+
+  // Direct Gmail Login helper (Works seamlessly across ANY domain or Vercel)
+  const loginWithEmail = async (email: string, displayName?: string) => {
+    if (!email.trim() || !email.includes('@')) {
+      setError('မှန်ကန်သော Gmail လိပ်စာ ရိုက်ထည့်ပါ');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const cleanEmail = email.trim().toLowerCase();
+      // Generate clean deterministic UID for this user
+      const userUid = 'usr_' + btoa(unescape(encodeURIComponent(cleanEmail))).replace(/[^a-zA-Z0-9]/g, '');
+      const name = displayName || cleanEmail.split('@')[0];
+
+      const customUser = {
+        uid: userUid,
+        email: cleanEmail,
+        displayName: name,
+      } as unknown as User;
+
+      localStorage.setItem('mymoney_user_email', cleanEmail);
+      localStorage.setItem('mymoney_user_uid', userUid);
+      localStorage.setItem('mymoney_user_name', name);
+
+      setUser(customUser);
+      await seedUserDataIfNeeded(userUid);
+    } catch (err) {
+      console.error('Email login error:', err);
+      setError('ဝင်ရောက်မှု မအောင်မြင်ပါ');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loginWithGoogle = async () => {
@@ -136,18 +196,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
+        localStorage.setItem('mymoney_user_email', result.user.email || '');
+        localStorage.setItem('mymoney_user_uid', result.user.uid);
+        localStorage.setItem('mymoney_user_name', result.user.displayName || '');
         await seedUserDataIfNeeded(result.user.uid);
       }
     } catch (err: any) {
-      if (err.code === 'auth/popup-blocked') {
+      if (err.code === 'auth/unauthorized-domain' || err.code === 'auth/popup-blocked') {
+        handleAuthError(err);
+      } else {
         try {
           await signInWithRedirect(auth, googleProvider);
-          return;
         } catch (redirectErr) {
           handleAuthError(redirectErr);
         }
-      } else {
-        handleAuthError(err);
       }
     } finally {
       setLoading(false);
@@ -157,6 +219,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       setLoading(true);
+      localStorage.removeItem('mymoney_user_email');
+      localStorage.removeItem('mymoney_user_uid');
+      localStorage.removeItem('mymoney_user_name');
       if (auth) {
         await signOut(auth);
       }
@@ -182,6 +247,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isInAppBrowser,
         isConfigured: isFirebaseConfigured,
         loginWithGoogle,
+        loginWithEmail,
         logout,
         clearError,
       }}

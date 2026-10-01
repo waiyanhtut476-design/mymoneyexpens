@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "User configuration including exchange rates and base currency",
+      "type": "object",
+      "properties": {
+        "fxRates": {
+          "type": "object",
+          "description": "Currency conversion rates against base currency"
+        },
+        "monthlyBudget": {
+          "type": "number",
+          "description": "Monthly budget limit"
+        },
+        "baseCurrency": {
+          "type": "string",
+          "description": "Base currency code",
+          "maxLength": 10
+        },
+        "language": {
+          "type": "string",
+          "description": "User interface language",
+          "maxLength": 10
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when settings were created"
+        }
+      },
+      "required": ["fxRates", "monthlyBudget", "baseCurrency", "language"]
+    },
+    "Wallet": {
+      "title": "Wallet",
+      "description": "User account or wallet entity",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Wallet name",
+          "maxLength": 100
+        },
+        "type": {
+          "type": "string",
+          "description": "Wallet type (cash, bank, card, etc.)",
+          "maxLength": 30
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code (THB, USD, MMK)",
+          "maxLength": 10
+        },
+        "initialBalance": {
+          "type": "number",
+          "description": "Starting balance"
+        },
+        "currentBalance": {
+          "type": "number",
+          "description": "Current balance"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["name", "type", "currency", "initialBalance"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Income, expense or transfer transaction",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "Amount spent or received"
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code",
+          "maxLength": 10
+        },
+        "type": {
+          "type": "string",
+          "description": "Transaction type (expense, income, transfer)",
+          "maxLength": 20
+        },
+        "category": {
+          "type": "string",
+          "description": "Category ID or name",
+          "maxLength": 50
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional notes or merchant description",
+          "maxLength": 500
+        },
+        "walletId": {
+          "type": "string",
+          "description": "ID of wallet used",
+          "maxLength": 128
+        },
+        "walletName": {
+          "type": "string",
+          "description": "Name of wallet used",
+          "maxLength": 100
+        },
+        "date": {
+          "type": "string",
+          "description": "Transaction date (YYYY-MM-DD)",
+          "maxLength": 30
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["amount", "currency", "type", "category"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/settings/{settingId}": {
+      "schema": "UserSettings",
+      "description": "User specific app settings and exchange rates"
+    },
+    "/users/{userId}/wallets/{walletId}": {
+      "schema": "Wallet",
+      "description": "User wallets and bank accounts"
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User financial transaction ledger entries"
+    }
+  }
+}

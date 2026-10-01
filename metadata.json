@@ -1,0 +1,6 @@
+{
+  "name": "MyMoney",
+  "description": "Personal Money Tracker with multi-currency support (THB, USD, MMK) and Firebase Auth in Myanmar language.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

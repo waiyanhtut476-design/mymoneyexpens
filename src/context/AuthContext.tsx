@@ -3,7 +3,6 @@ import {
   User,
   signInWithPopup,
   signInWithRedirect,
-  signInAnonymously,
   getRedirectResult,
   signOut,
   onAuthStateChanged,
@@ -18,10 +17,7 @@ interface AuthContextType {
   error: string | null;
   isInAppBrowser: boolean;
   isConfigured: boolean;
-  isUnauthorizedDomain: boolean;
-  currentHost: string;
   loginWithGoogle: () => Promise<void>;
-  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -32,9 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState<boolean>(false);
   const [isInAppBrowser, setIsInAppBrowser] = useState<boolean>(false);
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
 
   // Detect in-app browsers
   useEffect(() => {
@@ -108,8 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (errorCode === 'auth/unauthorized-domain') {
-      setIsUnauthorizedDomain(true);
-      setError(`ဒီ website domain (${currentHost}) ကို Firebase တွင် ခွင့်မပြုရသေးပါ`);
+      setError('Firebase တွင် ဤ domain ကို ခွင့်ပြုရန် လိုအပ်ပါသည် (Authorized Domain)');
       return;
     }
 
@@ -126,7 +119,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithGoogle = async () => {
     setError(null);
-    setIsUnauthorizedDomain(false);
     setLoading(true);
 
     if (isInAppBrowser) {
@@ -162,42 +154,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Login as Guest (Instant Access fallback for preview domains)
-  const loginAsGuest = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      if (auth) {
-        try {
-          const res = await signInAnonymously(auth);
-          if (res.user) {
-            await seedUserDataIfNeeded(res.user.uid);
-            return;
-          }
-        } catch (anonErr: any) {
-          console.warn('Anonymous auth note:', anonErr);
-        }
-      }
-
-      // Fallback local session user for preview
-      const demoUid = 'demo_user_' + (localStorage.getItem('mymoney_demo_id') || Math.random().toString(36).substring(2, 9));
-      localStorage.setItem('mymoney_demo_id', demoUid);
-      const mockUser = {
-        uid: demoUid,
-        displayName: 'အစမ်းအသုံးပြုသူ',
-        email: 'demo@mymoney.local',
-      } as unknown as User;
-
-      setUser(mockUser);
-      await seedUserDataIfNeeded(demoUid);
-    } catch (err) {
-      console.error('Guest login error:', err);
-      setError('အစမ်းဝင်ရောက်မှု မအောင်မြင်ပါ');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const logout = async () => {
     try {
       setLoading(true);
@@ -206,7 +162,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       setUser(null);
       setError(null);
-      setIsUnauthorizedDomain(false);
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
@@ -216,7 +171,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = () => {
     setError(null);
-    setIsUnauthorizedDomain(false);
   };
 
   return (
@@ -227,10 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         error,
         isInAppBrowser,
         isConfigured: isFirebaseConfigured,
-        isUnauthorizedDomain,
-        currentHost,
         loginWithGoogle,
-        loginAsGuest,
         logout,
         clearError,
       }}
